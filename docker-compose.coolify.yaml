@@ -1,3 +1,709 @@
-include:
-  - docker-compose.prebuilt.base.yaml
-  - docker-compose.prebuilt.ce.yaml
+name: alga-psa
+services:
+  email-service:
+    build:
+      context: /workspaces/alga-psa
+      dockerfile: services/email-service/Dockerfile
+    depends_on:
+      pgbouncer:
+        condition: service_started
+        required: true
+      postgres:
+        condition: service_started
+        required: true
+      redis:
+        condition: service_started
+        required: true
+      server:
+        condition: service_started
+        required: true
+    entrypoint:
+      - /app/entrypoint.sh
+    environment:
+      APP_ENV: production
+      APP_NAME: sebastian
+      DB_HOST: pgbouncer
+      DB_NAME: server
+      DB_NAME_SERVER: server
+      DB_PORT: "6432"
+      DB_TYPE: postgres
+      DB_USER_ADMIN: postgres
+      DB_USER_SERVER: app_user
+      EDITION: community
+      HOST: ""
+      IMAP_EVENT_CHANNEL_BY_TENANT: "false"
+      IMAP_FETCH_DELAY_MS: "0"
+      IMAP_LEASE_TTL_MS: "120000"
+      IMAP_MAX_ATTACHMENT_BYTES: "0"
+      IMAP_MAX_CONNECTIONS_PER_TENANT: "5"
+      IMAP_OAUTH_AUTH_MECHANISM: XOAUTH2
+      IMAP_POLL_INTERVAL_MS: "30000"
+      IMAP_PROVIDER_REFRESH_MS: "60000"
+      IMAP_WEBHOOK_SECRET: replace-with-a-secure-random-string
+      LOG_IS_FORMAT_JSON: "false"
+      LOG_IS_FULL_DETAILS: "false"
+      LOG_LEVEL: INFO
+      NODE_ENV: production
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      SECRET_READ_CHAIN: env,filesystem
+      SECRET_WRITE_PROVIDER: filesystem
+      VERSION: ""
+    networks:
+      app-network: null
+    platform: linux/amd64
+    secrets:
+      - source: postgres_password
+        target: /run/secrets/postgres_password
+      - source: db_password_server
+        target: /run/secrets/db_password_server
+      - source: redis_password
+        target: /run/secrets/redis_password
+      - source: crypto_key
+        target: /run/secrets/crypto_key
+      - source: token_secret_key
+        target: /run/secrets/token_secret_key
+      - source: nextauth_secret
+        target: /run/secrets/nextauth_secret
+      - source: google_oauth_client_id
+        target: /run/secrets/google_oauth_client_id
+      - source: google_oauth_client_secret
+        target: /run/secrets/google_oauth_client_secret
+      - source: alga_auth_key
+        target: /run/secrets/alga_auth_key
+    volumes:
+      - type: bind
+        source: /workspaces/alga-psa/secrets/db_password_server
+        target: /run/secrets/db_password_server
+        read_only: true
+      - type: bind
+        source: /workspaces/alga-psa/secrets/tenants
+        target: /run/secrets/tenants
+      - type: bind
+        source: /workspaces/alga-psa/services/email-service/entrypoint.sh
+        target: /app/entrypoint.sh
+        read_only: true
+  hocuspocus:
+    build:
+      context: /workspaces/alga-psa
+      dockerfile: hocuspocus/Dockerfile
+    depends_on:
+      redis:
+        condition: service_started
+        required: true
+    environment:
+      APP_ENV: production
+      APP_NAME: sebastian
+      DB_HOST: postgres
+      DB_NAME: hocuspocus
+      DB_NAME_HOCUSPOCUS: hocuspocus
+      DB_PASSWORD: ""
+      DB_PORT: "5432"
+      DB_TYPE: postgres
+      DB_USER: hocuspocus_user
+      DB_USER_HOCUSPOCUS: hocuspocus_user
+      EXPOSE_HOCUSPOCUS_PORT: "1234"
+      HOCUSPOCUS_PORT: "1234"
+      HOST: ""
+      NODE_ENV: production
+      PGDATABASE: hocuspocus
+      REDIS_HOST: redis
+      REDIS_PASSWORD: ""
+      REDIS_PORT: "6379"
+      VERSION: ""
+    networks:
+      app-network: null
+    ports:
+      - mode: ingress
+        target: 1234
+        published: "1234"
+        protocol: tcp
+    secrets:
+      - source: db_password_hocuspocus
+        target: /run/secrets/db_password_hocuspocus
+      - source: redis_password
+        target: /run/secrets/redis_password
+      - source: postgres_password
+        target: /run/secrets/postgres_password
+  pgbouncer:
+    build:
+      context: /workspaces/alga-psa/pgbouncer
+      dockerfile: Dockerfile
+    depends_on:
+      postgres:
+        condition: service_started
+        required: true
+    environment:
+      APP_ENV: production
+      APP_NAME: sebastian
+      CRYPTO_ALGORITHM: ""
+      CRYPTO_ITERATION: ""
+      CRYPTO_KEY_LENGTH: ""
+      CRYPTO_SALT_BYTES: ""
+      DB_HOST: postgres
+      DB_NAME_SERVER: server
+      DB_PORT: "5432"
+      DB_TYPE: postgres
+      DB_USER_SERVER: app_user
+      EMAIL_ENABLE: "false"
+      EMAIL_FROM: noreply@example.com
+      EMAIL_HOST: smtp.example.com
+      EMAIL_PORT: "587"
+      EMAIL_USERNAME: noreply@example.com
+      EXPOSE_DB_PORT: "5432"
+      EXPOSE_HOCUSPOCUS_PORT: "1234"
+      EXPOSE_REDIS_PORT: "6379"
+      EXPOSE_SERVER_PORT: "3000"
+      HOCUSPOCUS_PORT: "1234"
+      HOCUSPOCUS_URL: ""
+      HOST: ""
+      LOG_DIR_PATH: /path/to/logs
+      LOG_ENABLED_EXTERNAL_LOGGING: "false"
+      LOG_ENABLED_FILE_LOGGING: "false"
+      LOG_EXTERNAL_HTTP_HOST: ""
+      LOG_EXTERNAL_HTTP_LEVEL: ""
+      LOG_EXTERNAL_HTTP_PATH: ""
+      LOG_EXTERNAL_HTTP_PORT: ""
+      LOG_EXTERNAL_HTTP_TOKEN: ""
+      LOG_IS_FORMAT_JSON: "false"
+      LOG_IS_FULL_DETAILS: "false"
+      LOG_LEVEL: INFO
+      NEXTAUTH_SESSION_EXPIRES: "86400"
+      NEXTAUTH_URL: http://localhost:3000
+      NODE_ENV: production
+      POSTGRES_USER: postgres
+      PROJECT_NAME: sebastian
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      TOKEN_EXPIRES: ""
+      VERIFY_EMAIL_ENABLED: "false"
+      VERSION: ""
+    networks:
+      app-network: null
+    ports:
+      - mode: ingress
+        target: 6432
+        published: "6432"
+        protocol: tcp
+    secrets:
+      - source: postgres_password
+        target: /run/secrets/postgres_password
+      - source: db_password_server
+        target: /run/secrets/db_password_server
+  postgres:
+    command:
+      - postgres
+      - -c
+      - password_encryption=md5
+    environment:
+      APP_ENV: production
+      APP_NAME: sebastian
+      AUTH_TRUST_HOST: "false"
+      CRYPTO_ALGORITHM: ""
+      CRYPTO_ITERATION: ""
+      CRYPTO_KEY_LENGTH: ""
+      CRYPTO_SALT_BYTES: ""
+      DB_HOST: postgres
+      DB_NAME_SERVER: server
+      DB_PORT: "5432"
+      DB_TYPE: postgres
+      DB_USER_SERVER: app_user
+      EMAIL_ENABLE: "false"
+      EMAIL_FROM: noreply@example.com
+      EMAIL_HOST: smtp.example.com
+      EMAIL_PORT: "587"
+      EMAIL_USERNAME: noreply@example.com
+      EXPOSE_DB_PORT: "5432"
+      EXPOSE_HOCUSPOCUS_PORT: "1234"
+      EXPOSE_PGBOUNCER_PORT: "6432"
+      EXPOSE_REDIS_PORT: "6379"
+      EXPOSE_SERVER_PORT: "3000"
+      HOCUSPOCUS_PORT: "1234"
+      HOCUSPOCUS_URL: ""
+      HOST: ""
+      LOG_DIR_PATH: /path/to/logs
+      LOG_ENABLED_EXTERNAL_LOGGING: "false"
+      LOG_ENABLED_FILE_LOGGING: "false"
+      LOG_EXTERNAL_HTTP_HOST: ""
+      LOG_EXTERNAL_HTTP_LEVEL: ""
+      LOG_EXTERNAL_HTTP_PATH: ""
+      LOG_EXTERNAL_HTTP_PORT: ""
+      LOG_EXTERNAL_HTTP_TOKEN: ""
+      LOG_IS_FORMAT_JSON: "false"
+      LOG_IS_FULL_DETAILS: "false"
+      LOG_LEVEL: INFO
+      NEXTAUTH_SECRET: dummy
+      NEXTAUTH_SESSION_EXPIRES: "86400"
+      NEXTAUTH_URL: http://localhost:3000
+      NODE_ENV: production
+      OPENROUTER_API: ""
+      OPENROUTER_API_KEY: your-openrouter-api-key
+      PGBOUNCER_HOST: pgbouncer
+      PGBOUNCER_PORT: "6432"
+      POSTGRES_DB: server
+      POSTGRES_HOST_AUTH_METHOD: trust
+      POSTGRES_INITDB_ARGS: --auth-host=md5 --auth-local=md5
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      POSTGRES_USER: postgres
+      PROJECT_NAME: sebastian
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      TOKEN_EXPIRES: ""
+      VERIFY_EMAIL_ENABLED: "false"
+      VERSION: ""
+    image: ankane/pgvector:latest
+    networks:
+      app-network: null
+    ports:
+      - mode: ingress
+        target: 5432
+        published: "5432"
+        protocol: tcp
+    secrets:
+      - source: postgres_password
+        target: /run/secrets/postgres_password
+    volumes:
+      - type: volume
+        source: postgres_data
+        target: /var/lib/postgresql/data
+        volume: {}
+  redis:
+    build:
+      context: /workspaces/alga-psa
+      dockerfile: redis/Dockerfile
+    environment:
+      APP_ENV: production
+      APP_NAME: sebastian
+      AUTH_TRUST_HOST: "false"
+      CRYPTO_ALGORITHM: ""
+      CRYPTO_ITERATION: ""
+      CRYPTO_KEY_LENGTH: ""
+      CRYPTO_SALT_BYTES: ""
+      DB_HOST: postgres
+      DB_NAME_SERVER: server
+      DB_PORT: "5432"
+      DB_TYPE: postgres
+      DB_USER_SERVER: app_user
+      EMAIL_ENABLE: "false"
+      EMAIL_FROM: noreply@example.com
+      EMAIL_HOST: smtp.example.com
+      EMAIL_PORT: "587"
+      EMAIL_USERNAME: noreply@example.com
+      EXPOSE_DB_PORT: "5432"
+      EXPOSE_HOCUSPOCUS_PORT: "1234"
+      EXPOSE_PGBOUNCER_PORT: "6432"
+      EXPOSE_REDIS_PORT: "6379"
+      EXPOSE_SERVER_PORT: "3000"
+      HOCUSPOCUS_PORT: "1234"
+      HOCUSPOCUS_URL: ""
+      HOST: ""
+      LOG_DIR_PATH: /path/to/logs
+      LOG_ENABLED_EXTERNAL_LOGGING: "false"
+      LOG_ENABLED_FILE_LOGGING: "false"
+      LOG_EXTERNAL_HTTP_HOST: ""
+      LOG_EXTERNAL_HTTP_LEVEL: ""
+      LOG_EXTERNAL_HTTP_PATH: ""
+      LOG_EXTERNAL_HTTP_PORT: ""
+      LOG_EXTERNAL_HTTP_TOKEN: ""
+      LOG_IS_FORMAT_JSON: "false"
+      LOG_IS_FULL_DETAILS: "false"
+      LOG_LEVEL: INFO
+      NEXTAUTH_SECRET: dummy
+      NEXTAUTH_SESSION_EXPIRES: "86400"
+      NEXTAUTH_URL: http://localhost:3000
+      NODE_ENV: production
+      OPENROUTER_API: ""
+      OPENROUTER_API_KEY: your-openrouter-api-key
+      PGBOUNCER_HOST: pgbouncer
+      PGBOUNCER_PORT: "6432"
+      POSTGRES_USER: postgres
+      PROJECT_NAME: sebastian
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      TOKEN_EXPIRES: ""
+      VERIFY_EMAIL_ENABLED: "false"
+      VERSION: ""
+    networks:
+      app-network: null
+    ports:
+      - mode: ingress
+        target: 6379
+        published: "6379"
+        protocol: tcp
+    secrets:
+      - source: redis_password
+        target: /run/secrets/redis_password
+  server:
+    develop:
+      watch:
+        - path: /workspaces/alga-psa/server/src
+          action: sync
+          target: /app/src
+          ignore:
+            - node_modules
+        - path: /workspaces/alga-psa/server/package.json
+          action: rebuild
+    depends_on:
+      hocuspocus:
+        condition: service_started
+        required: false
+      pgbouncer:
+        condition: service_started
+        required: true
+      postgres:
+        condition: service_started
+        required: true
+      redis:
+        condition: service_started
+        required: true
+      setup:
+        condition: service_completed_successfully
+        required: true
+    entrypoint:
+      - /bin/sh
+      - -c
+      - export DATABASE_URL=postgresql://app_user:$$(cat /run/secrets/db_password_server)@pgbouncer:6432/server && /app/entrypoint.sh
+    environment:
+      APP_ENV: production
+      APP_NAME: sebastian
+      APP_PORT: "3000"
+      CRYPTO_ALGORITHM: ""
+      CRYPTO_ITERATION: ""
+      CRYPTO_KEY_LENGTH: ""
+      CRYPTO_SALT_BYTES: ""
+      DB_HOST: pgbouncer
+      DB_NAME: server
+      DB_NAME_HOCUSPOCUS: hocuspocus
+      DB_NAME_SERVER: server
+      DB_PASSWORD_HOCUSPOCUS: ""
+      DB_PORT: "6432"
+      DB_TYPE: postgres
+      DB_USER_ADMIN: postgres
+      DB_USER_HOCUSPOCUS: hocuspocus_user
+      DB_USER_SERVER: app_user
+      EDITION: community
+      EMAIL_ENABLE: "false"
+      EMAIL_FROM: noreply@example.com
+      EMAIL_HOST: smtp.example.com
+      EMAIL_PORT: "587"
+      EMAIL_USERNAME: noreply@example.com
+      EXPOSE_SERVER_PORT: "3000"
+      HOCUSPOCUS_URL: ""
+      HOST: ""
+      IMAP_WEBHOOK_SECRET: replace-with-a-secure-random-string
+      LOG_DIR_PATH: /path/to/logs
+      LOG_ENABLED_EXTERNAL_LOGGING: "false"
+      LOG_ENABLED_FILE_LOGGING: "false"
+      LOG_EXTERNAL_HTTP_HOST: ""
+      LOG_EXTERNAL_HTTP_LEVEL: ""
+      LOG_EXTERNAL_HTTP_PATH: ""
+      LOG_EXTERNAL_HTTP_PORT: ""
+      LOG_EXTERNAL_HTTP_TOKEN: ""
+      LOG_IS_FORMAT_JSON: "false"
+      LOG_IS_FULL_DETAILS: "false"
+      LOG_LEVEL: INFO
+      NEXTAUTH_SESSION_EXPIRES: "86400"
+      NEXTAUTH_URL: http://localhost:3000
+      NODE_ENV: production
+      PGBOSS_DATABASE: server
+      PORT: "3000"
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REQUIRE_HOCUSPOCUS: "false"
+      TOKEN_EXPIRES: ""
+      VERIFY_EMAIL_ENABLED: "false"
+      VERSION: ""
+    image: ghcr.io/nine-minds/alga-psa-ce:latest
+    networks:
+      app-network: null
+    platform: linux/amd64
+    ports:
+      - mode: ingress
+        target: 3000
+        published: "3000"
+        protocol: tcp
+    secrets:
+      - source: postgres_password
+        target: /run/secrets/postgres_password
+      - source: db_password_server
+        target: /run/secrets/db_password_server
+      - source: redis_password
+        target: /run/secrets/redis_password
+      - source: email_password
+        target: /run/secrets/email_password
+      - source: crypto_key
+        target: /run/secrets/crypto_key
+      - source: token_secret_key
+        target: /run/secrets/token_secret_key
+      - source: nextauth_secret
+        target: /run/secrets/nextauth_secret
+      - source: google_oauth_client_id
+        target: /run/secrets/google_oauth_client_id
+      - source: google_oauth_client_secret
+        target: /run/secrets/google_oauth_client_secret
+      - source: db_password_hocuspocus
+        target: /run/secrets/db_password_hocuspocus
+      - source: alga_auth_key
+        target: /run/secrets/alga_auth_key
+    volumes:
+      - type: volume
+        source: files_data
+        target: /data/files
+        volume: {}
+      - type: bind
+        source: /workspaces/alga-psa/secrets/db_password_server
+        target: /run/secrets/db_password_server
+        read_only: true
+      - type: bind
+        source: /workspaces/alga-psa/secrets/tenants
+        target: /run/secrets/tenants
+      - type: bind
+        source: /workspaces/alga-psa/server/migrations
+        target: /app/server/migrations
+        read_only: true
+      - type: bind
+        source: /workspaces/alga-psa/server/seeds
+        target: /app/server/seeds
+        read_only: true
+      - type: bind
+        source: /workspaces/alga-psa/scripts
+        target: /app/scripts
+        read_only: true
+  setup:
+    depends_on:
+      postgres:
+        condition: service_started
+        required: true
+    entrypoint:
+      - /app/setup/entrypoint.sh
+    environment:
+      APP_ENV: production
+      APP_NAME: sebastian
+      DB_HOST: postgres
+      DB_HOST_ADMIN: postgres
+      DB_NAME_HOCUSPOCUS: hocuspocus
+      DB_NAME_SERVER: server
+      DB_PORT: "5432"
+      DB_PORT_ADMIN: "5432"
+      DB_TYPE: postgres
+      DB_USER_ADMIN: postgres
+      DB_USER_HOCUSPOCUS: hocuspocus_user
+      DB_USER_SERVER: app_user
+      EDITION: community
+      EMAIL_ENABLE: "false"
+      EMAIL_FROM: noreply@example.com
+      EMAIL_PORT: "587"
+      EMAIL_USERNAME: noreply@example.com
+      HOST: ""
+      LOG_IS_FORMAT_JSON: "false"
+      LOG_IS_FULL_DETAILS: "false"
+      LOG_LEVEL: INFO
+      NEXTAUTH_SESSION_EXPIRES: "86400"
+      NEXTAUTH_URL: http://localhost:3000
+      NODE_ENV: production
+      NODE_OPTIONS: --experimental-vm-modules
+      PGBOSS_DATABASE: server
+      VERSION: ""
+    image: ghcr.io/nine-minds/alga-psa-ce:latest
+    networks:
+      app-network: null
+    platform: linux/amd64
+    restart: "no"
+    secrets:
+      - source: postgres_password
+        target: /run/secrets/postgres_password
+      - source: db_password_server
+        target: /run/secrets/db_password_server
+      - source: db_password_hocuspocus
+        target: /run/secrets/db_password_hocuspocus
+    volumes:
+      - type: bind
+        source: /workspaces/alga-psa/setup/config.ini
+        target: /app/setup/config.ini
+        read_only: true
+      - type: bind
+        source: /workspaces/alga-psa/setup/entrypoint.sh
+        target: /app/setup/entrypoint.sh
+        read_only: true
+      - type: bind
+        source: /workspaces/alga-psa/secrets/postgres_password
+        target: /run/secrets/postgres_password
+        read_only: true
+      - type: bind
+        source: /workspaces/alga-psa/secrets/db_password_server
+        target: /run/secrets/db_password_server
+        read_only: true
+      - type: bind
+        source: /workspaces/alga-psa/server/migrations
+        target: /app/server/migrations
+        read_only: true
+      - type: bind
+        source: /workspaces/alga-psa/server/seeds
+        target: /app/server/seeds
+        read_only: true
+      - type: bind
+        source: /workspaces/alga-psa/scripts
+        target: /app/scripts
+        read_only: true
+  workflow-worker:
+    build:
+      context: /workspaces/alga-psa
+      dockerfile: services/workflow-worker/Dockerfile
+    depends_on:
+      pgbouncer:
+        condition: service_started
+        required: true
+      postgres:
+        condition: service_started
+        required: true
+      redis:
+        condition: service_started
+        required: true
+      server:
+        condition: service_started
+        required: true
+    deploy:
+      replicas: 2
+    entrypoint:
+      - /app/entrypoint.sh
+    environment:
+      APP_ENV: production
+      APP_NAME: sebastian
+      DB_HOST: pgbouncer
+      DB_NAME: server
+      DB_NAME_SERVER: server
+      DB_PORT: "6432"
+      DB_TYPE: postgres
+      DB_USER_ADMIN: postgres
+      DB_USER_SERVER: app_user
+      EDITION: community
+      HOST: ""
+      LOG_IS_FORMAT_JSON: "false"
+      LOG_IS_FULL_DETAILS: "false"
+      LOG_LEVEL: INFO
+      NODE_ENV: production
+      PGBOSS_DATABASE: server
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      SECRET_READ_CHAIN: env,filesystem
+      SECRET_WRITE_PROVIDER: filesystem
+      VERSION: ""
+      WORKFLOW_DISTRIBUTED_MODE: "true"
+      WORKFLOW_REDIS_BATCH_SIZE: "10"
+      WORKFLOW_REDIS_CONSUMER_GROUP: workflow-workers
+      WORKFLOW_REDIS_IDLE_TIMEOUT_MS: "60000"
+      WORKFLOW_REDIS_STREAM_PREFIX: 'workflow:events:'
+      WORKFLOW_WORKER_MODE: v2
+    networks:
+      app-network: null
+    platform: linux/amd64
+    secrets:
+      - source: postgres_password
+        target: /run/secrets/postgres_password
+      - source: db_password_server
+        target: /run/secrets/db_password_server
+      - source: redis_password
+        target: /run/secrets/redis_password
+      - source: crypto_key
+        target: /run/secrets/crypto_key
+      - source: token_secret_key
+        target: /run/secrets/token_secret_key
+      - source: nextauth_secret
+        target: /run/secrets/nextauth_secret
+    volumes:
+      - type: bind
+        source: /workspaces/alga-psa/secrets/db_password_server
+        target: /run/secrets/db_password_server
+        read_only: true
+      - type: bind
+        source: /workspaces/alga-psa/services/workflow-worker/entrypoint.sh
+        target: /app/entrypoint.sh
+        read_only: true
+networks:
+  app-network:
+    name: alga-psa_app-network
+    driver: bridge
+volumes:
+  files_data:
+    name: alga-psa_files_data
+  postgres_data:
+    name: alga-psa_postgres_data
+secrets:
+  alga_auth_key:
+    name: alga-psa_alga_auth_key
+    file: /workspaces/alga-psa/secrets/alga_auth_key
+  crypto_key:
+    name: alga-psa_crypto_key
+    file: /workspaces/alga-psa/secrets/crypto_key
+  db_password_hocuspocus:
+    name: alga-psa_db_password_hocuspocus
+    file: /workspaces/alga-psa/secrets/db_password_hocuspocus
+  db_password_server:
+    name: alga-psa_db_password_server
+    file: /workspaces/alga-psa/secrets/db_password_server
+  email_password:
+    name: alga-psa_email_password
+    file: /workspaces/alga-psa/secrets/email_password
+  google_oauth_client_id:
+    name: alga-psa_google_oauth_client_id
+    file: /workspaces/alga-psa/secrets/google_oauth_client_id
+  google_oauth_client_secret:
+    name: alga-psa_google_oauth_client_secret
+    file: /workspaces/alga-psa/secrets/google_oauth_client_secret
+  nextauth_secret:
+    name: alga-psa_nextauth_secret
+    file: /workspaces/alga-psa/secrets/nextauth_secret
+  postgres_password:
+    name: alga-psa_postgres_password
+    file: /workspaces/alga-psa/secrets/postgres_password
+  redis_password:
+    name: alga-psa_redis_password
+    file: /workspaces/alga-psa/secrets/redis_password
+  token_secret_key:
+    name: alga-psa_token_secret_key
+    file: /workspaces/alga-psa/secrets/token_secret_key
+x-environment:
+  APP_ENV: production
+  APP_NAME: sebastian
+  CRYPTO_ALGORITHM: ""
+  CRYPTO_ITERATION: ""
+  CRYPTO_KEY_LENGTH: ""
+  CRYPTO_SALT_BYTES: ""
+  DB_HOST: postgres
+  DB_NAME_SERVER: server
+  DB_PORT: "5432"
+  DB_TYPE: postgres
+  DB_USER_SERVER: app_user
+  EMAIL_ENABLE: "false"
+  EMAIL_FROM: noreply@example.com
+  EMAIL_HOST: smtp.example.com
+  EMAIL_PORT: "587"
+  EMAIL_USERNAME: noreply@example.com
+  EXPOSE_DB_PORT: "5432"
+  EXPOSE_HOCUSPOCUS_PORT: "1234"
+  EXPOSE_REDIS_PORT: "6379"
+  EXPOSE_SERVER_PORT: "3000"
+  HOCUSPOCUS_PORT: "1234"
+  HOCUSPOCUS_URL: ""
+  HOST: ""
+  LOG_DIR_PATH: /path/to/logs
+  LOG_ENABLED_EXTERNAL_LOGGING: "false"
+  LOG_ENABLED_FILE_LOGGING: "false"
+  LOG_EXTERNAL_HTTP_HOST: ""
+  LOG_EXTERNAL_HTTP_LEVEL: ""
+  LOG_EXTERNAL_HTTP_PATH: ""
+  LOG_EXTERNAL_HTTP_PORT: ""
+  LOG_EXTERNAL_HTTP_TOKEN: ""
+  LOG_IS_FORMAT_JSON: "false"
+  LOG_IS_FULL_DETAILS: "false"
+  LOG_LEVEL: INFO
+  NEXTAUTH_SESSION_EXPIRES: "86400"
+  NEXTAUTH_URL: http://localhost:3000
+  NODE_ENV: production
+  POSTGRES_USER: postgres
+  PROJECT_NAME: sebastian
+  REDIS_HOST: redis
+  REDIS_PORT: "6379"
+  TOKEN_EXPIRES: ""
+  VERIFY_EMAIL_ENABLED: "false"
+  VERSION: ""
